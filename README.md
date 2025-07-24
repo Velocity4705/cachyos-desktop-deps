@@ -1,5 +1,7 @@
 # Desktop Environment Dependencies
-This Repository provides the dependencies for all the Desktop Environments from CachyOS (excluding UKUI). Note that everything here is Arch. Copy and paste the code of any Desktop Environment in the terminal to install those dependencies.
+This Repository provides the dependencies for all the Desktop Environments from **CachyOS** (*excluding UKUI*). Note that everything here is based on **Arch**. Copy and paste the code of any Desktop Environment in the terminal to install those dependencies.
+
+To **UNINSTALL** the previous Desktop Environment, use the code for the previous desktop environment you had, and use the flag **"-Rs"** instead of "-S".
 
 ## KDE Plasma
 ```
