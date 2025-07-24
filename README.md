@@ -1,6 +1,5 @@
 # Desktop Environment Dependencies
----
-This README provides the dependencies for all the Desktop Environments from CachyOS (excluding UKUI). Note that everything here is Arch. Copy and paste the code of any Desktop Environment in the terminal to install those dependencies.
+This Repository provides the dependencies for all the Desktop Environments from CachyOS (excluding UKUI). Note that everything here is Arch. Copy and paste the code of any Desktop Environment in the terminal to install those dependencies.
 
 ## KDE Plasma
 ```
@@ -66,4 +65,3 @@ sudo pacman -S sway waybar wl-clipboard egl-wayland wayland-protocols wofi foot 
 ```
 sudo pacman -S cachyos-wayfire-settings wayfire-desktop-git egl-wayland wayland-protocols wofi ly xorg-xhost xorg-xwayland
 ```
----
