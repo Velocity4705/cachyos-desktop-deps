@@ -1,7 +1,7 @@
 # Desktop Environment Dependencies
 This README provides the dependencies for all the Desktop Environments from **CachyOS**. Note that everything here is **Arch**. Copy and paste the code of any Desktop Environment in the terminal to install those dependencies.
 
-To UNINSTALL the previous Desktop Environment, copy the code of the previous Desktop Environment you had, and paste it with the flag **"-Rs"** instead of "-S".
+To UNINSTALL the previous Desktop Environment, copy the code of the previous Desktop Environment you had, and paste it with the flag **"-Ru"** instead of "-S".
 
 ## KDE Plasma
 ```
