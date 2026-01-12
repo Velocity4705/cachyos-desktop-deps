@@ -1,8 +1,9 @@
 # CachyOS Desktop Environment Dependencies
-It provides the dependencies for all the Desktop Environments from the latest update of **CachyOS**.
-Flags to assist in Installing/Deleting a Desktop Environment:
-**-S**: To Search Dependencies.
-**-Rns**: To Remove Dependencies, including Orphaned Dependencies.
+It provides the dependencies for all the Desktop Environments from the latest update of **CachyOS**. <br>
+Flags to assist in Installing/Deleting a Desktop Environment: <br>
+**-S**: To Search Dependencies. <br>
+**-Rns**: To Remove Dependencies, including Orphaned Dependencies. <br>
+<hr>
 
 ## KDE Plasma:
 ```
@@ -91,5 +92,5 @@ sudo pacman -S sddm thunar thunar-archive-plugin thunar-volman peony xfce4-termi
 
 ## Niri:
 ```
-*COMING SOON*
+sudo pacman -S cachyos-alacritty-config cachyos-niri-settings sddm ttf-fantasque-nerd ttf-font-awesome otf-font-awesome awesome-terminal-fonts noto-fonts noto-fonts-emoji ttf-fira-sans ttf-hack kvantum qt5ct swaybg swaylock-effects-git swaylock-fancy-git niri waybar xdg-desktop-portal-gnome xwayland-satellite mako wob pamixer wofi wlogout wl-clipboard polkit-kde-agent bemenu bemenu-wayland xorg-xwayland capitaine-cursors cachyos-wallpapers kvantum-theme-nordic-git brightnessctl cachyos-nord-gtk-theme-git
 ```
