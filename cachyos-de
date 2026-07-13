@@ -1,0 +1,642 @@
+#!/usr/bin/env python3
+"""
+cachyos-de — CachyOS Desktop Environment Dependency Manager
+
+Manage DE/WM package lists by syncing with the official CachyOS Calamares
+installer config (netinstall.yaml) on GitHub. No ISO booting required.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import textwrap
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PACKAGES_JSON = SCRIPT_DIR / "packages.json"
+README_MD = SCRIPT_DIR / "README.md"
+
+NETINSTALL_URL = (
+    "https://raw.githubusercontent.com/CachyOS/cachyos-calamares/"
+    "cachyos-dev/src/modules/netinstall/netinstall.yaml"
+)
+
+DISPLAY_NAMES: dict[str, str] = {
+    "KDE-Desktop": "KDE Plasma",
+    "GNOME-Desktop": "GNOME",
+    "Budgie-Desktop": "Budgie",
+    "i3-Window-Manager": "i3wm",
+    "LXDE-Desktop": "LXDE",
+    "LXQT-Desktop": "LXQT",
+    "MATE-Desktop": "MATE",
+}
+
+DE_GROUPS: set[str] = {
+    "KDE-Desktop", "GNOME-Desktop", "Xfce4", "bspwm", "Budgie-Desktop",
+    "Cinnamon", "Cosmic", "i3-Window-Manager", "Hyprland", "Niri",
+    "LXDE-Desktop", "LXQT-Desktop", "MATE-Desktop", "Openbox",
+    "Qtile", "Sway", "UKUI", "Wayfire",
+}
+
+NON_DE_GROUPS: set[str] = {
+    "CachyOS required (hidden)", "CachyOS Packages", "CachyOS shell configuration",
+    "Base-devel + Common packages", "CPU specific Microcode update packages",
+    "Support for HP Printer/Scanner", "Accessibility Tools",
+    "Printing-Support", "Firefox and language package",
+}
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def eprint(*args: Any, **kwargs: Any) -> None:
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def fatal(msg: str) -> None:
+    eprint(f"error: {msg}")
+    sys.exit(1)
+
+
+def load_data() -> dict[str, Any]:
+    if not PACKAGES_JSON.exists():
+        fatal(f"{PACKAGES_JSON} not found. Run reconstruction or create it first.")
+    with open(PACKAGES_JSON) as f:
+        return json.load(f)
+
+
+def save_data(data: dict[str, Any]) -> None:
+    with open(PACKAGES_JSON, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def display_name(upstream_name: str) -> str:
+    return DISPLAY_NAMES.get(upstream_name, upstream_name)
+
+
+def upstream_name(display_name: str) -> str:
+    rev = {v: k for k, v in DISPLAY_NAMES.items()}
+    return rev.get(display_name, display_name)
+
+
+def bold(s: str) -> str:
+    return f"\033[1m{s}\033[0m"
+
+
+def green(s: str) -> str:
+    return f"\033[92m{s}\033[0m"
+
+
+def red(s: str) -> str:
+    return f"\033[91m{s}\033[0m"
+
+
+def yellow(s: str) -> str:
+    return f"\033[93m{s}\033[0m"
+
+
+def cyan(s: str) -> str:
+    return f"\033[96m{s}\033[0m"
+
+
+# ── YAML Parser ──────────────────────────────────────────────────────────────
+
+def fetch_upstream() -> str | None:
+    """Fetch netinstall.yaml from GitHub. Return text or None on failure."""
+    try:
+        req = urllib.request.Request(NETINSTALL_URL)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        eprint(f"HTTP {e.code} fetching upstream: {e.reason}")
+        return None
+    except urllib.error.URLError as e:
+        eprint(f"Network error fetching upstream: {e.reason}")
+        return None
+
+
+def parse_yaml(text: str) -> dict[str, list[str]]:
+    """Parse netinstall.yaml into {group_name: [packages]}.
+
+    Only requires Python stdlib — no PyYAML dependency.
+    """
+    groups: dict[str, list[str]] = {}
+
+    entries = re.split(r"\n(?=- name: \")", text)
+    for entry in entries:
+        m = re.match(r'- name: "([^"]+)"', entry)
+        if not m:
+            continue
+        name = m.group(1)
+        pkgs = re.findall(r"^[ ]{4,}- (\S+)", entry, re.MULTILINE)
+        pkgs = sorted(set(p for p in pkgs if ":" not in p))
+        groups[name] = pkgs
+
+    return groups
+
+
+# ── Commands ─────────────────────────────────────────────────────────────────
+
+def cmd_list() -> None:
+    """List all tracked desktop environments with package counts."""
+    data = load_data()
+    des = data["desktop_environments"]
+    print(f"{bold('Desktop Environment')}  {bold('Packages')}")
+    print("-" * 40)
+    for name in sorted(des.keys()):
+        cnt = len(des[name]["packages"])
+        print(f"  {name:<24}  {cnt}")
+
+
+def cmd_show(de_name: str) -> None:
+    """Show packages for a specific DE."""
+    data = load_data()
+    des = data["desktop_environments"]
+    # Case-insensitive fuzzy match
+    matched = _match_de(de_name, des)
+    if not matched:
+        fatal(f"Unknown DE: {de_name}")
+    print(f"\n{bold(matched)}:")
+    for pkg in des[matched]["packages"]:
+        print(f"    {pkg}")
+    print(f"\n  Total: {len(des[matched]['packages'])} packages")
+
+
+def cmd_search(pkg: str) -> None:
+    """Search for a package across all DEs."""
+    data = load_data()
+    des = data["desktop_environments"]
+    found = []
+    for name, info in sorted(des.items()):
+        if pkg in info["packages"]:
+            found.append(name)
+    if found:
+        print(f"'{pkg}' found in:")
+        for de in found:
+            print(f"    {de}")
+    else:
+        print(f"'{pkg}' not found in any DE.")
+
+
+def cmd_sync() -> None:
+    """Fetch upstream, diff against local, and optionally update."""
+    data = load_data()
+    des = data["desktop_environments"]
+
+    print(f"Fetching from upstream... ", end="", flush=True)
+    yaml_text = fetch_upstream()
+    if yaml_text is None:
+        fatal("Failed to fetch upstream. Check your connection.")
+    upstream_groups = parse_yaml(yaml_text)
+    print("done")
+
+    # Build display-name → upstream packages map for DE groups only
+    upstream: dict[str, list[str]] = {}
+    for ug_name, ug_pkgs in upstream_groups.items():
+        if ug_name in DE_GROUPS:
+            upstream[display_name(ug_name)] = ug_pkgs
+
+    has_changes = False
+    for de_name in sorted(des.keys()):
+        info = des[de_name]
+        local_pkgs = set(info["packages"])
+        up_pkgs = set(
+            upstream.get(de_name)
+            or upstream.get(display_name(info["upstream_name"]))
+            or upstream_groups.get(info["upstream_name"])
+            or []
+        )
+
+        added = sorted(up_pkgs - local_pkgs)
+        removed = sorted(local_pkgs - up_pkgs)
+
+        if not added and not removed:
+            continue
+
+        has_changes = True
+        print(f"\n{bold(de_name)}:")
+        if added:
+            for p in added:
+                print(f"  {green('+')} {p}")
+        if removed:
+            for p in removed:
+                print(f"  {red('-')} {p}")
+
+    if not has_changes:
+        print(f"\n{green('All DEs are up to date.')}")
+        return
+
+    # Detect new DEs in upstream we don't track
+    tracked_upstream = set(i["upstream_name"] for i in des.values())
+    new_des = sorted(
+        display_name(ug) for ug in DE_GROUPS
+        if ug not in tracked_upstream and ug in upstream_groups
+    )
+    # Also detect unknown groups that look like DEs
+    all_upstream = set(upstream_groups.keys())
+    known_non_de = NON_DE_GROUPS | DE_GROUPS | tracked_upstream
+    potential_new = sorted(all_upstream - known_non_de)
+    for g in potential_new:
+        # Only flag groups that actually have packages
+        if upstream_groups.get(g):
+            disp = display_name(g)
+            new_des.append(disp)
+            # Temporarily add to upstream map so it can be added
+            upstream[disp] = upstream_groups[g]
+    if new_des:
+        print(f"\n{yellow('New DEs available upstream:')}")
+        for de in new_des:
+            cnt = len(upstream[de])
+            print(f"  {cyan('+')} {de} ({cnt} packages)")
+
+    answer = input(f"\n{bold('Apply upstream updates?')} [y/N] ").strip().lower()
+    if answer not in ("y", "yes"):
+        print("Cancelled.")
+        return
+
+    for de_name in list(des.keys()):
+        info = des[de_name]
+        up_pkgs = (
+            upstream.get(de_name)
+            or upstream.get(display_name(info["upstream_name"]))
+            or upstream_groups.get(info["upstream_name"])
+        )
+        if up_pkgs is not None:
+            info["packages"] = sorted(up_pkgs)
+
+    # Add new DEs
+    for de_name in new_des:
+        up_name = upstream_name(de_name)
+        des[de_name] = {
+            "upstream_name": up_name,
+            "packages": sorted(upstream[de_name]),
+        }
+
+    data["metadata"]["last_synced"] = __import__("datetime").datetime.now().isoformat()
+    save_data(data)
+    print(f"\n{green('Updated.')} Run '{bold('cachyos-de readme')}' to regenerate README.md.")
+
+
+def cmd_diff(args: list[str]) -> None:
+    """Show diff between local and upstream for one or all DEs."""
+    data = load_data()
+    des = data["desktop_environments"]
+
+    yaml_text = fetch_upstream()
+    if yaml_text is None:
+        fatal("Failed to fetch upstream.")
+    upstream_groups = parse_yaml(yaml_text)
+
+    target_des: list[str] = []
+    if args:
+        matched = _match_de(args[0], des)
+        if not matched:
+            fatal(f"Unknown DE: {args[0]}")
+        target_des = [matched]
+    else:
+        target_des = sorted(des.keys())
+
+    for de_name in target_des:
+        info = des[de_name]
+        up_name = info["upstream_name"]
+        up_pkgs = set(upstream_groups.get(up_name, []))
+        local_pkgs = set(info["packages"])
+
+        added = sorted(up_pkgs - local_pkgs)
+        removed = sorted(local_pkgs - up_pkgs)
+
+        if not added and not removed:
+            print(f"{bold(de_name)}: {green('up to date')}")
+            continue
+
+        print(f"\n{bold(de_name)}:")
+        if added:
+            print(f"  {green('+')} added in upstream:")
+            for p in added:
+                print(f"      {p}")
+        if removed:
+            print(f"  {red('-')} removed from upstream:")
+            for p in removed:
+                print(f"      {p}")
+
+
+def cmd_update(args: list[str]) -> None:
+    """Apply upstream updates to local data."""
+    data = load_data()
+    des = data["desktop_environments"]
+
+    yaml_text = fetch_upstream()
+    if yaml_text is None:
+        fatal("Failed to fetch upstream.")
+    upstream_groups = parse_yaml(yaml_text)
+
+    target_des: list[str] = []
+    if args:
+        matched = _match_de(args[0], des)
+        if not matched:
+            fatal(f"Unknown DE: {args[0]}")
+        target_des = [matched]
+    else:
+        target_des = sorted(des.keys())
+
+    updated = []
+    for de_name in target_des:
+        info = des[de_name]
+        up_name = info["upstream_name"]
+        up_pkgs = upstream_groups.get(up_name)
+        if up_pkgs is None:
+            eprint(f"Warning: {de_name} not found upstream, skipping.")
+            continue
+        old = set(info["packages"])
+        new = set(up_pkgs)
+        if old != new:
+            info["packages"] = sorted(up_pkgs)
+            updated.append(de_name)
+
+    if updated:
+        data["metadata"]["last_synced"] = __import__("datetime").datetime.now().isoformat()
+        save_data(data)
+        for de in updated:
+            print(f"  {green('✓')} {de} updated")
+        print(f"\nRun '{bold('cachyos-de readme')}' to regenerate README.md.")
+    else:
+        print(f"{green('All selected DEs are already up to date.')}")
+
+
+def cmd_check() -> None:
+    """Check if packages still exist in pacman repositories."""
+    data = load_data()
+    des = data["desktop_environments"]
+
+    all_pkgs: set[str] = set()
+    for info in des.values():
+        all_pkgs.update(info["packages"])
+
+    total = len(all_pkgs)
+    _require_pacman()
+
+    print(f"Checking {total} unique packages...")
+
+    all_sorted = sorted(all_pkgs)
+    batch_size = 50
+
+    # Step 1: check regular repos with pacman -Si
+    in_repos: set[str] = set()
+    for i in range(0, len(all_sorted), batch_size):
+        batch = all_sorted[i:i + batch_size]
+        result = subprocess.run(
+            ["pacman", "-Si"] + batch,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            in_repos.update(batch)
+        else:
+            for line in result.stdout.split("\n"):
+                m = re.match(r"^Name\s*:\s*(\S+)", line)
+                if m:
+                    in_repos.add(m.group(1))
+
+    unresolved = sorted(all_pkgs - in_repos)
+
+    # Step 2: check if unresolved are package groups
+    groups: set[str] = set()
+    still_unresolved: list[str] = []
+    for pkg in unresolved:
+        result = subprocess.run(
+            ["pacman", "-Sg", pkg],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            groups.add(pkg)
+        else:
+            still_unresolved.append(pkg)
+
+    # Step 3: try AUR check via yay/paru if available
+    aur_tool = None
+    for tool in ["yay", "paru"]:
+        try:
+            subprocess.run([tool, "--version"], capture_output=True, check=True)
+            aur_tool = tool
+            break
+        except FileNotFoundError:
+            continue
+
+    in_aur: set[str] = set()
+    if aur_tool and still_unresolved:
+        for i in range(0, len(still_unresolved), batch_size):
+            batch = still_unresolved[i:i + batch_size]
+            result = subprocess.run(
+                [aur_tool, "-Si"] + batch,
+                capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                in_aur.update(batch)
+            else:
+                for line in result.stdout.split("\n"):
+                    m = re.match(r"^Name\s*:\s*(\S+)", line)
+                    if m:
+                        in_aur.add(m.group(1))
+
+    truly_missing = sorted(set(still_unresolved) - in_aur)
+
+    # Report
+    if groups:
+        print(f"\n{yellow('Package groups (install with pacman -S --needed):')}")
+        for pkg in sorted(groups):
+            des_list = ", ".join(sorted(de for de, info in des.items() if pkg in info["packages"]))
+            print(f"  {pkg:40} ({des_list})")
+
+    if in_aur:
+        print(f"\n{yellow('AUR packages (install with ' + aur_tool + '):')}")
+        for pkg in sorted(in_aur):
+            des_list = ", ".join(sorted(de for de, info in des.items() if pkg in info["packages"]))
+            print(f"  {pkg:40} ({des_list})")
+
+    if truly_missing:
+        print(f"\n{red('Not found in repos, groups, or AUR:')}")
+        for pkg in truly_missing:
+            des_list = ", ".join(sorted(de for de, info in des.items() if pkg in info["packages"]))
+            print(f"  {pkg:40} ({des_list})")
+
+    if not groups and not in_aur and not truly_missing:
+        print(f"\n{green('All packages found in repositories.')}")
+
+
+def cmd_readme() -> None:
+    """Regenerate README.md from packages.json."""
+    data = load_data()
+    des = data["desktop_environments"]
+
+    meta = data["metadata"]
+    last_synced = meta.get("last_synced", "Never")
+    if last_synced:
+        last_synced = last_synced[:10]  # just YYYY-MM-DD
+
+    lines = [
+        "# CachyOS Desktop Environment Dependencies",
+        f"*Last verified: {last_synced}*",
+        "",
+        f"[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)",
+        "",
+        "It provides the dependencies for all the Desktop Environments from the latest update of **CachyOS**. <br>",
+        "Flags to assist in Installing/Deleting a Desktop Environment: <br>",
+        "**-S**: To Search Dependencies. <br>",
+        "**-Rns**: To Remove Dependencies, including Orphaned Dependencies. <br>",
+        "<hr>",
+        "",
+    ]
+
+    for de_name in sorted(des.keys()):
+        packages = des[de_name]["packages"]
+        lines.append(f"## {de_name}:")
+        lines.append("```")
+        lines.append(f"sudo pacman -S {' '.join(packages)}")
+        lines.append("```")
+        lines.append("")
+
+    lines.append("## Contributing")
+    lines.append("")
+    lines.append("See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report issues, submit changes, and understand the repo structure.")
+
+    with open(README_MD, "w") as f:
+        f.write("\n".join(lines))
+
+    print(f"{green('README.md regenerated.')}")
+
+
+def _require_pacman() -> None:
+    """Exit with a clear message if pacman is not available."""
+    try:
+        subprocess.run(["pacman", "--version"], capture_output=True, check=True)
+    except FileNotFoundError:
+        fatal("pacman not found. This command requires Arch/CachyOS with pacman installed.")
+
+
+def cmd_install(de_name: str) -> None:
+    """Install all packages for a DE."""
+    _require_pacman()
+    data = load_data()
+    matched = _match_de(de_name, data["desktop_environments"])
+    if not matched:
+        fatal(f"Unknown DE: {de_name}")
+    packages = data["desktop_environments"][matched]["packages"]
+    print(f"Installing {len(packages)} packages for {bold(matched)}...")
+    cmd = ["sudo", "pacman", "-S", "--needed", "--noconfirm"] + packages
+    result = subprocess.run(cmd)
+    if result.returncode == 0:
+        print(f"\n{green('Installation complete.')}")
+    else:
+        eprint(f"\n{red('Installation encountered errors.')}")
+
+
+def cmd_remove(de_name: str) -> None:
+    """Remove all packages for a DE."""
+    _require_pacman()
+    data = load_data()
+    matched = _match_de(de_name, data["desktop_environments"])
+    if not matched:
+        fatal(f"Unknown DE: {matched}")
+    packages = data["desktop_environments"][matched]["packages"]
+    print(f"Removing {len(packages)} packages for {bold(matched)}...")
+    answer = input(f"Are you sure? This will remove all listed packages (y/N) ").strip().lower()
+    if answer not in ("y", "yes"):
+        print("Cancelled.")
+        return
+    cmd = ["sudo", "pacman", "-Rns", "--noconfirm"] + packages
+    result = subprocess.run(cmd)
+    if result.returncode == 0:
+        print(f"\n{green('Removal complete.')}")
+    else:
+        eprint(f"\n{red('Removal encountered errors.')}")
+
+
+# ── Matching ─────────────────────────────────────────────────────────────────
+
+def _match_de(name: str, des: dict) -> str | None:
+    """Case-insensitive prefix/suffix/fuzzy match a DE name."""
+    name_lower = name.lower().replace("-", "").replace(" ", "")
+    for de in des:
+        de_clean = de.lower().replace("-", "").replace(" ", "")
+        if de_clean == name_lower:
+            return de
+    for de in des:
+        if name_lower in de.lower():
+            return de
+    return None
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+def print_usage() -> None:
+    print(textwrap.dedent("""\
+    Usage: cachyos-de <command> [args]
+
+    Commands (work on any distro):
+      sync                  Fetch upstream, diff, and update local data
+      list                  List all tracked DEs with package counts
+      show <de>             Show packages for a DE
+      search <package>      Find which DEs include a package
+      diff [de]             Show diff between local and upstream
+      update [de]           Apply upstream updates to local data
+      readme                Regenerate README.md from packages.json
+
+    Commands (require Arch/CachyOS with pacman):
+      check                 Check if packages exist in pacman repos
+      install <de>          Install a DE's packages (alias: i)
+      remove <de>           Remove a DE's packages (alias: rm)
+    """))
+
+
+COMMANDS: dict[str, Any] = {
+    "sync": cmd_sync,
+    "list": cmd_list,
+    "show": cmd_show,
+    "search": cmd_search,
+    "diff": cmd_diff,
+    "update": cmd_update,
+    "check": cmd_check,
+    "readme": cmd_readme,
+    "install": cmd_install,
+    "i": cmd_install,
+    "remove": cmd_remove,
+    "rm": cmd_remove,
+}
+
+
+def main() -> None:
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+        print_usage()
+        return
+
+    cmd = sys.argv[1]
+    args = sys.argv[2:]
+
+    handler = COMMANDS.get(cmd)
+    if handler is None:
+        fatal(f"Unknown command: {cmd}\nRun 'cachyos-de --help' for usage.")
+
+    needs_de = (cmd_show, cmd_install, cmd_remove)
+    needs_arg = (cmd_search,)
+
+    if handler in needs_de:
+        if not args:
+            fatal(f"'{cmd}' requires a DE name argument.")
+        handler(args[0])
+    elif handler in needs_arg:
+        if not args:
+            fatal(f"'{cmd}' requires an argument.")
+        handler(args[0])
+    elif handler in (cmd_diff, cmd_update):
+        handler(args)
+    else:
+        handler()
+
+
+if __name__ == "__main__":
+    main()
