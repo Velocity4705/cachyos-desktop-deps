@@ -473,14 +473,20 @@ def cmd_readme() -> None:
     data = load_data()
     des = data["desktop_environments"]
 
+    from datetime import datetime
+
     meta = data["metadata"]
-    last_synced = meta.get("last_synced", "Never")
-    if last_synced:
-        last_synced = last_synced[:10]  # just YYYY-MM-DD
+    raw = meta.get("last_synced")
+    if raw:
+        dt = datetime.fromisoformat(raw)
+        last_synced = dt.strftime("%B %d, %Y")
+    else:
+        last_synced = "Never"
 
     lines = [
         "# CachyOS Desktop Environment Dependencies",
-        f"*Last verified: {last_synced}*",
+        f"> **Last verified: {last_synced}** - Verified every two days.",
+        "",
         "",
         f"[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)",
         "",
