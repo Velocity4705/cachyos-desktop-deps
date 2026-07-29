@@ -1,7 +1,7 @@
 {
   "metadata": {
     "upstream_url": "https://raw.githubusercontent.com/CachyOS/cachyos-calamares/cachyos-dev/src/modules/netinstall/netinstall.yaml",
-    "last_synced": "2026-07-19T17:00:56.691247",
+    "last_synced": "2026-07-29T11:21:33.747828",
     "last_updated": "2026-01-12"
   },
   "desktop_environments": {
@@ -11,11 +11,11 @@
         "ark",
         "bluedevil",
         "breeze-gtk",
+        "cachy-update",
         "cachyos-emerald-kde-theme-git",
         "cachyos-iridescent-kde",
         "cachyos-kde-settings",
         "cachyos-nord-kde-theme-git",
-        "cachyos-themes-sddm",
         "char-white",
         "dolphin",
         "ffmpegthumbs",
@@ -49,28 +49,31 @@
         "plymouth-kcm",
         "powerdevil",
         "spectacle",
+        "tesseract-data-eng",
         "xsettingsd"
       ]
     },
     "GNOME": {
       "upstream_name": "GNOME-Desktop",
       "packages": [
+        "baobab",
+        "cachy-update",
+        "cachyos-gnome-settings",
+        "decibels",
         "file-roller",
         "fwupd",
         "gdm",
-        "gedit",
         "gnome-backgrounds",
         "gnome-calculator",
-        "gnome-console",
         "gnome-control-center",
         "gnome-disk-utility",
         "gnome-keyring",
-        "gnome-nettool",
         "gnome-power-manager",
         "gnome-shell",
+        "gnome-text-editor",
         "gnome-tweaks",
-        "gnome-usage",
         "gvfs-afc",
+        "gvfs-dnssd",
         "gvfs-gphoto2",
         "gvfs-mtp",
         "gvfs-nfs",
@@ -79,8 +82,11 @@
         "loupe",
         "malcontent",
         "papers",
+        "ptyxis",
+        "resources",
         "showtime",
         "simple-scan",
+        "snapshot",
         "sushi"
       ]
     },
@@ -108,7 +114,6 @@
         "xed",
         "xfce4",
         "xfce4-battery-plugin",
-        "xfce4-datetime-plugin",
         "xfce4-mount-plugin",
         "xfce4-netload-plugin",
         "xfce4-notifyd",
@@ -175,7 +180,7 @@
         "gnome-keyring",
         "gnome-terminal",
         "lightdm",
-        "lightdm-gtk-greeter",
+        "lightdm-slick-greeter",
         "metacity",
         "system-config-printer"
       ]
@@ -191,6 +196,7 @@
         "cosmic-greeter",
         "cosmic-icon-theme",
         "cosmic-launcher",
+        "cosmic-monitor",
         "cosmic-notifications",
         "cosmic-osd",
         "cosmic-panel",
@@ -204,8 +210,10 @@
         "cosmic-text-editor",
         "cosmic-wallpapers",
         "cosmic-workspaces",
+        "gnome-keyring",
         "notification-daemon",
         "xdg-desktop-portal-cosmic",
+        "xdg-desktop-portal-gtk",
         "xorg-xwayland"
       ]
     },
@@ -230,17 +238,11 @@
     "Hyprland": {
       "upstream_name": "Hyprland",
       "packages": [
+        "cachyos-hypr-noctalia",
         "dolphin",
         "hyprland",
         "kitty",
-        "playerctl",
-        "polkit-kde-agent",
-        "sddm",
-        "uwsm",
-        "wl-clipboard",
-        "wofi",
-        "xdg-desktop-portal-hyprland",
-        "xorg-xwayland"
+        "noctalia-greeter"
       ]
     },
     "LXDE": {
@@ -419,47 +421,17 @@
         "xorg-xwayland"
       ]
     },
-    "UKUI": {
-      "upstream_name": "UKUI",
-      "packages": [
-        "accountsservice",
-        "gnome-screenshot",
-        "gvfs",
-        "mate-control-center",
-        "mate-system-monitor",
-        "mate-terminal",
-        "peony",
-        "qt5-quickcontrols",
-        "qt5-ukui-platformtheme",
-        "redshift",
-        "sddm",
-        "thunar",
-        "thunar-archive-plugin",
-        "thunar-volman",
-        "ukui-biometric-auth",
-        "ukui-control-center",
-        "ukui-interface",
-        "ukui-media",
-        "ukui-menu",
-        "ukui-menus",
-        "ukui-notebook",
-        "ukui-panel",
-        "ukui-power-manager",
-        "ukui-screensaver",
-        "ukui-session-manager",
-        "ukui-settings-daemon",
-        "ukui-sidebar",
-        "ukui-system-monitor",
-        "ukui-themes",
-        "ukui-wallpapers",
-        "ukui-window-switch",
-        "xfce4-terminal"
-      ]
-    },
     "Niri": {
       "upstream_name": "Niri",
       "packages": [
         "cachyos-niri-noctalia",
+        "sddm"
+      ]
+    },
+    "MangoWM": {
+      "upstream_name": "MangoWM",
+      "packages": [
+        "cachyos-mangowc-dms",
         "sddm"
       ]
     }

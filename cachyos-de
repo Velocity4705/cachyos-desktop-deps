@@ -41,7 +41,7 @@ DISPLAY_NAMES: dict[str, str] = {
 DE_GROUPS: set[str] = {
     "KDE-Desktop", "GNOME-Desktop", "Xfce4", "bspwm", "Budgie-Desktop",
     "Cinnamon", "Cosmic", "i3-Window-Manager", "Hyprland", "Niri",
-    "LXDE-Desktop", "LXQT-Desktop", "MATE-Desktop", "Openbox",
+    "LXDE-Desktop", "LXQT-Desktop", "MangoWM", "MATE-Desktop", "Openbox",
     "Qtile", "Sway", "UKUI", "Wayfire",
 }
 
@@ -50,6 +50,8 @@ NON_DE_GROUPS: set[str] = {
     "Base-devel + Common packages", "CPU specific Microcode update packages",
     "Support for HP Printer/Scanner", "Accessibility Tools",
     "Printing-Support", "Firefox and language package",
+    "CachyOS kernels (hidden)", "CachyOS kernels (hidden/handheld)",
+    "CachyOS Handhelds",
 }
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -205,13 +207,19 @@ def cmd_sync() -> None:
     for de_name in sorted(des.keys()):
         info = des[de_name]
         local_pkgs = set(info["packages"])
-        up_pkgs = set(
+
+        up_raw = (
             upstream.get(de_name)
             or upstream.get(display_name(info["upstream_name"]))
             or upstream_groups.get(info["upstream_name"])
-            or []
         )
 
+        if up_raw is None:
+            has_changes = True
+            print(f"\n{bold(de_name)}: {red('removed from upstream')}")
+            continue
+
+        up_pkgs = set(up_raw)
         added = sorted(up_pkgs - local_pkgs)
         removed = sorted(local_pkgs - up_pkgs)
 
@@ -490,10 +498,11 @@ def cmd_readme() -> None:
         "",
         f"[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)",
         "",
-        "It provides the dependencies for all the Desktop Environments from the latest update of **CachyOS**. <br>",
-        "Flags to assist in Installing/Deleting a Desktop Environment: <br>",
-        "**-S**: To Search Dependencies. <br>",
-        "**-Rns**: To Remove Dependencies, including Orphaned Dependencies. <br>",
+        "Package lists for every Desktop Environment from the latest CachyOS installer config.",
+        "",
+        "**Usage:**",
+        "- `sudo pacman -S --needed <packages>` — Install a DE's dependencies (skips already-installed).",
+        "- `sudo pacman -Rns <packages>` — Remove a DE's packages and their unused dependencies.",
         "<hr>",
         "",
     ]
