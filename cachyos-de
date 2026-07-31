@@ -259,6 +259,8 @@ def cmd_sync(args: list[str] | None = None) -> None:
 
     if not has_changes:
         print(f"\n{green('All DEs are up to date.')}")
+        if "--no-commit" in args:
+            return
         _refresh_last_synced(data)
         save_data(data)
         return
@@ -670,7 +672,7 @@ def cmd_readme() -> None:
 
     lines = [
         "# CachyOS Desktop Environment Dependencies",
-        f"> **Last verified: {last_synced}** - Verified daily via CI.",
+        f"> **Last verified: {last_synced}** - Verified among available Desktop Environments.",
         "",
         "",
         f"[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)",
