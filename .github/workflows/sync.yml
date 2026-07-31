@@ -77,14 +77,12 @@ jobs:
             REMOVED=$(grep -oE '^[^:]+: removed from upstream' sync_output.txt | sed 's/: removed from upstream//' | tr '\n' ', ' | sed 's/, $//')
             EXISTING=$(gh issue list --state open --search "DE removed from upstream" --json number --jq 'length' || echo 0)
             if [ "${EXISTING:-0}" -eq 0 ]; then
+              BODY="These desktop environments were removed from the upstream CachyOS installer config:"
+              BODY="${BODY}"$'\n'"- $REMOVED"
+              BODY="${BODY}"$'\n'$'\n'"Consider removing them from \`packages.json\` or keeping them as manually maintained."
               gh issue create \
                 --title "DE removed from upstream: $REMOVED" \
-                --body "These desktop environments were removed from the upstream CachyOS installer config:
-
-- $REMOVED
-
-Consider removing them from \`packages.json\` or keeping them as manually maintained.
-" 
+                --body "$BODY"
             fi
           fi
 

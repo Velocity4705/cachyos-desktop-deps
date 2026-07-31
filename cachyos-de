@@ -240,6 +240,8 @@ def cmd_sync(args: list[str] | None = None) -> None:
             continue
 
         up_pkgs = set(up_raw)
+        overrides = info.get("overrides", {})
+        up_pkgs = (up_pkgs - set(overrides.get("remove", []))) | set(overrides.get("add", []))
         added = sorted(up_pkgs - local_pkgs)
         removed = sorted(local_pkgs - up_pkgs)
 
@@ -300,6 +302,8 @@ def cmd_sync(args: list[str] | None = None) -> None:
             or upstream_groups.get(info["upstream_name"])
         )
         if up_pkgs is not None:
+            overrides = info.get("overrides", {})
+            up_pkgs = (set(up_pkgs) - set(overrides.get("remove", []))) | set(overrides.get("add", []))
             info["packages"] = sorted(up_pkgs)
 
     # Add new DEs
@@ -338,6 +342,8 @@ def cmd_diff(args: list[str]) -> None:
         info = des[de_name]
         up_name = info["upstream_name"]
         up_pkgs = set(upstream_groups.get(up_name, []))
+        overrides = info.get("overrides", {})
+        up_pkgs = (up_pkgs - set(overrides.get("remove", []))) | set(overrides.get("add", []))
         local_pkgs = set(info["packages"])
 
         added = sorted(up_pkgs - local_pkgs)

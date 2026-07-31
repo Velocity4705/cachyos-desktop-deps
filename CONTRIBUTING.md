@@ -20,6 +20,23 @@ Found an outdated package list or a missing DE? Open an issue with the DE name a
 
 No manual edits to README.md — it's always regenerated from `packages.json`.
 
+### Package overrides
+
+`sync` mirrors upstream `netinstall.yaml`. If a package upstream lists is broken or missing (e.g. removed from Arch/AUR), don't edit `packages` directly — `sync` will revert it. Instead add an `overrides` block to the DE entry:
+
+```json
+"QTile": {
+  "upstream_name": "Qtile",
+  "overrides": {
+    "remove": ["ttf-font-awesome"],
+    "add": ["otf-font-awesome"]
+  },
+  "packages": [ "..." ]
+}
+```
+
+`sync` and `diff` apply these on top of upstream's list, so your fix survives daily runs.
+
 ## Automated maintenance
 
 A scheduled GitHub Actions workflow runs `cachyos-de sync --yes` daily. It:

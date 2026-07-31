@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+sync_output.txt
+check_output.txt
