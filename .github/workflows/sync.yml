@@ -1,0 +1,103 @@
+name: Daily Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Sync DE package lists
+        env:
+          NO_COLOR: "1"
+        run: |
+          set +e
+          ./cachyos-de sync --yes > sync_output.txt 2>&1
+          cat sync_output.txt
+          set -e
+
+      - name: Regenerate README
+        run: ./cachyos-de readme
+
+      - name: Check for stale packages
+        env:
+          NO_COLOR: "1"
+        run: |
+          set +e
+          ./cachyos-de check --online > check_output.txt 2>&1
+          CHECK_EXIT=$?
+          cat check_output.txt
+          exit 0
+          set -e
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: sync DE package lists from upstream"
+            git push
+          else
+            echo "No changes to commit."
+          fi
+
+      - name: Open issue for stale packages
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if grep -q "Not found in repos, groups, or AUR" check_output.txt; then
+            EXISTING=$(gh issue list --state open --search "stale packages" --json number --jq 'length' || echo 0)
+            if [ "${EXISTING:-0}" -eq 0 ]; then
+              gh issue create \
+                --title "Stale packages not found in any repo" \
+                --body "$(cat check_output.txt | sed -n '/Not found in repos, groups, or AUR/,$p')"
+            fi
+          fi
+
+      - name: Open issue for removed DEs
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if grep -q "removed from upstream" sync_output.txt; then
+            REMOVED=$(grep -oE '^[^:]+: removed from upstream' sync_output.txt | sed 's/: removed from upstream//' | tr '\n' ', ' | sed 's/, $//')
+            EXISTING=$(gh issue list --state open --search "DE removed from upstream" --json number --jq 'length' || echo 0)
+            if [ "${EXISTING:-0}" -eq 0 ]; then
+              gh issue create \
+                --title "DE removed from upstream: $REMOVED" \
+                --body "These desktop environments were removed from the upstream CachyOS installer config:
+
+- $REMOVED
+
+Consider removing them from \`packages.json\` or keeping them as manually maintained.
+" 
+            fi
+          fi
+
+      - name: Open issue for new DEs
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if grep -q "New DEs available upstream" sync_output.txt; then
+            EXISTING=$(gh issue list --state open --search "New DE available upstream" --json number --jq 'length' || echo 0)
+            if [ "${EXISTING:-0}" -eq 0 ]; then
+              gh issue create \
+                --title "New DE available upstream" \
+                --body "$(cat sync_output.txt | sed -n '/New DEs available upstream/,$p')"
+            fi
+          fi

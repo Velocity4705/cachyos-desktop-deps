@@ -16,5 +16,16 @@ Found an outdated package list or a missing DE? Open an issue with the DE name a
 - `packages.json` — structured package lists (source of truth)
 - `cachyos-de` — CLI tool for sync, search, diff, etc.
 - `README.md` — auto-generated from packages.json
+- `.github/workflows/` — CI/CD
 
 No manual edits to README.md — it's always regenerated from `packages.json`.
+
+## Automated maintenance
+
+A scheduled GitHub Actions workflow runs `cachyos-de sync --yes` daily. It:
+
+- Applies upstream package changes and commits them
+- Refreshes the "Last verified" date
+- Opens an issue if a DE is removed or added upstream
+
+You can trigger it manually via **Actions → Daily Sync → Run workflow**.

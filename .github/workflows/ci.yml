@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Syntax check
+        run: python3 -m py_compile cachyos-de
+
+      - name: Validate packages.json
+        run: |
+          python3 -c "import json; json.load(open('packages.json'))"
+          echo "packages.json is valid"
+
+      - name: README matches packages.json
+        run: |
+          ./cachyos-de readme
+          if ! git diff --quiet README.md; then
+            echo "README.md is out of date. Run './cachyos-de readme' and commit."
+            git diff README.md
+            exit 1
+          fi
+          echo "README.md is up to date."
+
+      - name: Verify packages exist in repos
+        run: |
+          ./cachyos-de check --online

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -77,6 +78,13 @@ def save_data(data: dict[str, Any]) -> None:
         json.dump(data, f, indent=2)
 
 
+def _refresh_last_synced(data: dict[str, Any]) -> None:
+    """Stamp the current timestamp into metadata.last_synced."""
+    from datetime import datetime
+
+    data["metadata"]["last_synced"] = datetime.now().isoformat()
+
+
 def display_name(upstream_name: str) -> str:
     return DISPLAY_NAMES.get(upstream_name, upstream_name)
 
@@ -86,24 +94,27 @@ def upstream_name(display_name: str) -> str:
     return rev.get(display_name, display_name)
 
 
+_NO_COLOR = os.environ.get("NO_COLOR", "") != ""
+
+
 def bold(s: str) -> str:
-    return f"\033[1m{s}\033[0m"
+    return s if _NO_COLOR else f"\033[1m{s}\033[0m"
 
 
 def green(s: str) -> str:
-    return f"\033[92m{s}\033[0m"
+    return s if _NO_COLOR else f"\033[92m{s}\033[0m"
 
 
 def red(s: str) -> str:
-    return f"\033[91m{s}\033[0m"
+    return s if _NO_COLOR else f"\033[91m{s}\033[0m"
 
 
 def yellow(s: str) -> str:
-    return f"\033[93m{s}\033[0m"
+    return s if _NO_COLOR else f"\033[93m{s}\033[0m"
 
 
 def cyan(s: str) -> str:
-    return f"\033[96m{s}\033[0m"
+    return s if _NO_COLOR else f"\033[96m{s}\033[0m"
 
 
 # ── YAML Parser ──────────────────────────────────────────────────────────────
@@ -185,8 +196,15 @@ def cmd_search(pkg: str) -> None:
         print(f"'{pkg}' not found in any DE.")
 
 
-def cmd_sync() -> None:
-    """Fetch upstream, diff against local, and optionally update."""
+def cmd_sync(args: list[str] | None = None) -> None:
+    """Fetch upstream, diff against local, and optionally update.
+
+    Flags:
+      --yes, -y   Apply upstream updates without prompting (for CI).
+    """
+    args = args or []
+    auto_yes = "--yes" in args or "-y" in args
+
     data = load_data()
     des = data["desktop_environments"]
 
@@ -204,6 +222,7 @@ def cmd_sync() -> None:
             upstream[display_name(ug_name)] = ug_pkgs
 
     has_changes = False
+    removed_de: list[str] = []
     for de_name in sorted(des.keys()):
         info = des[de_name]
         local_pkgs = set(info["packages"])
@@ -216,6 +235,7 @@ def cmd_sync() -> None:
 
         if up_raw is None:
             has_changes = True
+            removed_de.append(de_name)
             print(f"\n{bold(de_name)}: {red('removed from upstream')}")
             continue
 
@@ -237,6 +257,8 @@ def cmd_sync() -> None:
 
     if not has_changes:
         print(f"\n{green('All DEs are up to date.')}")
+        _refresh_last_synced(data)
+        save_data(data)
         return
 
     # Detect new DEs in upstream we don't track
@@ -262,7 +284,10 @@ def cmd_sync() -> None:
             cnt = len(upstream[de])
             print(f"  {cyan('+')} {de} ({cnt} packages)")
 
-    answer = input(f"\n{bold('Apply upstream updates?')} [y/N] ").strip().lower()
+    if auto_yes:
+        answer = "y"
+    else:
+        answer = input(f"\n{bold('Apply upstream updates?')} [y/N] ").strip().lower()
     if answer not in ("y", "yes"):
         print("Cancelled.")
         return
@@ -285,7 +310,7 @@ def cmd_sync() -> None:
             "packages": sorted(upstream[de_name]),
         }
 
-    data["metadata"]["last_synced"] = __import__("datetime").datetime.now().isoformat()
+    _refresh_last_synced(data)
     save_data(data)
     print(f"\n{green('Updated.')} Run '{bold('cachyos-de readme')}' to regenerate README.md.")
 
@@ -367,17 +392,106 @@ def cmd_update(args: list[str]) -> None:
             updated.append(de_name)
 
     if updated:
-        data["metadata"]["last_synced"] = __import__("datetime").datetime.now().isoformat()
+        _refresh_last_synced(data)
         save_data(data)
         for de in updated:
             print(f"  {green('✓')} {de} updated")
         print(f"\nRun '{bold('cachyos-de readme')}' to regenerate README.md.")
     else:
+        _refresh_last_synced(data)
+        save_data(data)
         print(f"{green('All selected DEs are already up to date.')}")
 
 
-def cmd_check() -> None:
-    """Check if packages still exist in pacman repositories."""
+ARCH_DBS = [
+    ("core", "https://geo.mirror.pkgbuild.com/core/os/x86_64/core.db"),
+    ("extra", "https://geo.mirror.pkgbuild.com/extra/os/x86_64/extra.db"),
+]
+CACHYOS_DB_URL = "https://cdn.cachyos.org/repo/x86_64/cachyos/cachyos.db"
+AUR_RPC_URL = "https://aur.archlinux.org/rpc/v5/info"
+
+
+def _download(url: str) -> bytes | None:
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "cachyos-de/1.0 (repo maintenance tool)"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.read()
+    except Exception as e:  # noqa: BLE001
+        eprint(f"  failed to fetch {url}: {e}")
+        return None
+
+
+def _parse_repo_db(tar_bytes: bytes) -> tuple[set[str], set[str]]:
+    """Extract package names and group names from a pacman repo .db (zstd tar).
+
+    Decompresses with the zstd CLI, then reads each package's desc file.
+    Returns (package_names, group_names).
+    """
+    import io
+    import tarfile
+
+    proc = subprocess.run(
+        ["zstd", "-d", "-c"],
+        input=tar_bytes,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return set(), set()
+
+    names: set[str] = set()
+    groups: set[str] = set()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(proc.stdout), mode="r:") as tf:
+            for member in tf.getmembers():
+                if not member.name.endswith("/desc"):
+                    continue
+                try:
+                    content = tf.extractfile(member).read().decode()
+                except Exception:  # noqa: BLE001
+                    continue
+                section = None
+                for line in content.split("\n"):
+                    line = line.strip()
+                    if line.startswith("%") and line.endswith("%"):
+                        section = line.strip("%").upper()
+                    elif line and section == "NAME":
+                        names.add(line)
+                    elif line and section == "GROUPS":
+                        groups.add(line)
+    except Exception as e:  # noqa: BLE001
+        eprint(f"  failed to parse repo db: {e}")
+
+    return names, groups
+
+
+def _aur_packages(pkgs: list[str]) -> set[str]:
+    """Query the AUR RPC API (batch) for package existence."""
+    found: set[str] = set()
+    for i in range(0, len(pkgs), 50):
+        batch = pkgs[i:i + 50]
+        url = AUR_RPC_URL + "?" + "&".join(f"arg[]={p}" for p in batch)
+        data = _download(url)
+        if not data:
+            continue
+        try:
+            obj = json.loads(data)
+            for r in obj.get("results", []):
+                found.add(r.get("Name", ""))
+        except Exception:  # noqa: BLE001
+            continue
+    return found
+
+
+def cmd_check(args: list[str] | None = None) -> None:
+    """Check if packages still exist in repositories.
+
+    Uses pacman if available; otherwise falls back to online mode
+    (Arch + CachyOS repo DBs and the AUR API), so it works on any distro.
+    """
+    args = args or []
     data = load_data()
     des = data["desktop_environments"]
 
@@ -386,9 +500,22 @@ def cmd_check() -> None:
         all_pkgs.update(info["packages"])
 
     total = len(all_pkgs)
-    _require_pacman()
 
-    print(f"Checking {total} unique packages...")
+    # Detect pacman availability
+    has_pacman = shutil.which("pacman") is not None
+
+    if has_pacman and "--online" not in args:
+        _check_with_pacman(all_pkgs, des)
+        return
+
+    if not has_pacman and "--online" not in args:
+        print(f"{yellow('pacman not found — using online mode.')}")
+
+    _check_online(all_pkgs, des)
+
+
+def _check_with_pacman(all_pkgs: set[str], des: dict) -> None:
+    print(f"Checking {len(all_pkgs)} unique packages against pacman...")
 
     all_sorted = sorted(all_pkgs)
     batch_size = 50
@@ -453,15 +580,58 @@ def cmd_check() -> None:
 
     truly_missing = sorted(set(still_unresolved) - in_aur)
 
+    _report_check(all_pkgs, des, groups, in_aur, truly_missing)
+
+
+def _check_online(all_pkgs: set[str], des: dict) -> None:
+    print(f"Checking {len(all_pkgs)} unique packages (online mode)...")
+
+    # Load Arch official package/group names from core + extra DBs
+    print("  Downloading Arch repo databases...")
+    arch_names: set[str] = set()
+    arch_groups: set[str] = set()
+    for repo_name, url in ARCH_DBS:
+        data = _download(url)
+        if data is None:
+            continue
+        names, groups = _parse_repo_db(data)
+        arch_names |= names
+        arch_groups |= groups
+        print(f"    {repo_name}: {len(names)} packages")
+
+    # Load CachyOS package names
+    print("  Downloading CachyOS repo database...")
+    cachyos_names: set[str] = set()
+    data = _download(CACHYOS_DB_URL)
+    if data is not None:
+        cachyos_names, _ = _parse_repo_db(data)
+        print(f"    cachyos: {len(cachyos_names)} packages")
+
+    all_repos = arch_names | cachyos_names
+    unresolved = sorted(all_pkgs - all_repos)
+
+    # Groups
+    groups = sorted(p for p in unresolved if p in arch_groups)
+    still_unresolved = [p for p in unresolved if p not in arch_groups]
+
+    # AUR
+    print("  Checking AUR...")
+    in_aur = _aur_packages(still_unresolved) if still_unresolved else set()
+    truly_missing = sorted(set(still_unresolved) - in_aur)
+
+    _report_check(all_pkgs, des, groups, in_aur, truly_missing)
+
+
+def _report_check(all_pkgs: set[str], des: dict, groups: list, in_aur: set[str], truly_missing: list) -> None:
     # Report
     if groups:
-        print(f"\n{yellow('Package groups (install with pacman -S --needed):')}")
+        print(f"\n{yellow('Package groups:')}")
         for pkg in sorted(groups):
             des_list = ", ".join(sorted(de for de, info in des.items() if pkg in info["packages"]))
             print(f"  {pkg:40} ({des_list})")
 
     if in_aur:
-        print(f"\n{yellow('AUR packages (install with ' + aur_tool + '):')}")
+        print(f"\n{yellow('AUR packages:')}")
         for pkg in sorted(in_aur):
             des_list = ", ".join(sorted(de for de, info in des.items() if pkg in info["packages"]))
             print(f"  {pkg:40} ({des_list})")
@@ -471,6 +641,7 @@ def cmd_check() -> None:
         for pkg in truly_missing:
             des_list = ", ".join(sorted(de for de, info in des.items() if pkg in info["packages"]))
             print(f"  {pkg:40} ({des_list})")
+        sys.exit(1)
 
     if not groups and not in_aur and not truly_missing:
         print(f"\n{green('All packages found in repositories.')}")
@@ -493,7 +664,7 @@ def cmd_readme() -> None:
 
     lines = [
         "# CachyOS Desktop Environment Dependencies",
-        f"> **Last verified: {last_synced}** - Verified every two days.",
+        f"> **Last verified: {last_synced}** - Verified daily via CI.",
         "",
         "",
         f"[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)",
@@ -602,9 +773,13 @@ def print_usage() -> None:
       readme                Regenerate README.md from packages.json
 
     Commands (require Arch/CachyOS with pacman):
-      check                 Check if packages exist in pacman repos
       install <de>          Install a DE's packages (alias: i)
       remove <de>           Remove a DE's packages (alias: rm)
+
+    Notes:
+      check runs online automatically when pacman is unavailable
+      (uses Arch + CachyOS repo DBs and the AUR API). Force it with
+      'check --online'.
     """))
 
 
@@ -647,7 +822,7 @@ def main() -> None:
         if not args:
             fatal(f"'{cmd}' requires an argument.")
         handler(args[0])
-    elif handler in (cmd_diff, cmd_update):
+    elif handler in (cmd_diff, cmd_update, cmd_sync, cmd_check):
         handler(args)
     else:
         handler()

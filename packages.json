@@ -1,7 +1,7 @@
 {
   "metadata": {
     "upstream_url": "https://raw.githubusercontent.com/CachyOS/cachyos-calamares/cachyos-dev/src/modules/netinstall/netinstall.yaml",
-    "last_synced": "2026-07-29T11:21:33.747828",
+    "last_synced": "2026-07-31T13:29:33.394694",
     "last_updated": "2026-01-12"
   },
   "desktop_environments": {
@@ -375,6 +375,7 @@
         "gnome-themes-extra",
         "ly",
         "noto-fonts",
+        "otf-font-awesome",
         "picom",
         "polkit-gnome",
         "qt5ct",
@@ -382,7 +383,6 @@
         "rofi",
         "thunar",
         "ttf-cascadia-code",
-        "ttf-font-awesome",
         "ttf-jetbrains-mono",
         "ttf-nerd-fonts-symbols",
         "wired",
