@@ -1,5 +1,5 @@
 # CachyOS Desktop Environment Dependencies
-> **Last verified: July 31, 2026** - Verified among available Desktop Environments.
+> **Last verified: August 01, 2026** - Updates when changed.
 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

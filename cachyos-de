@@ -672,7 +672,7 @@ def cmd_readme() -> None:
 
     lines = [
         "# CachyOS Desktop Environment Dependencies",
-        f"> **Last verified: {last_synced}** - Verified among available Desktop Environments.",
+        f"> **Last verified: {last_synced}** - Updates when changed.",
         "",
         "",
         f"[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)",
