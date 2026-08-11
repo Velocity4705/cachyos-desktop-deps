@@ -1,7 +1,7 @@
 {
   "metadata": {
     "upstream_url": "https://raw.githubusercontent.com/CachyOS/cachyos-calamares/cachyos-dev/src/modules/netinstall/netinstall.yaml",
-    "last_synced": "2026-08-01T18:57:30.342906",
+    "last_synced": "2026-08-11T07:07:26.666513",
     "last_updated": "2026-01-12"
   },
   "desktop_environments": {
@@ -212,6 +212,7 @@
         "cosmic-workspaces",
         "gnome-keyring",
         "notification-daemon",
+        "sddm",
         "xdg-desktop-portal-cosmic",
         "xdg-desktop-portal-gtk",
         "xorg-xwayland"
