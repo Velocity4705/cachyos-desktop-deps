@@ -1,5 +1,5 @@
 # CachyOS Desktop Environment Dependencies
-> **Last verified: August 11, 2026** - Updates when changed.
+> **Last verified: August 12, 2026** - Updates when changed.
 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -18,7 +18,7 @@ sudo pacman -S budgie-control-center budgie-desktop budgie-desktop-view budgie-e
 
 ## COSMIC:
 ```
-sudo pacman -S cosmic-app-library cosmic-applets cosmic-bg cosmic-comp cosmic-files cosmic-greeter cosmic-icon-theme cosmic-launcher cosmic-monitor cosmic-notifications cosmic-osd cosmic-panel cosmic-player cosmic-randr cosmic-screenshot cosmic-session cosmic-settings cosmic-settings-daemon cosmic-terminal cosmic-text-editor cosmic-wallpapers cosmic-workspaces gnome-keyring notification-daemon sddm xdg-desktop-portal-cosmic xdg-desktop-portal-gtk xorg-xwayland
+sudo pacman -S cosmic-app-library cosmic-applets cosmic-bg cosmic-comp cosmic-files cosmic-greeter cosmic-icon-theme cosmic-launcher cosmic-monitor cosmic-notifications cosmic-osd cosmic-panel cosmic-player cosmic-randr cosmic-screenshot cosmic-session cosmic-settings cosmic-settings-daemon cosmic-terminal cosmic-text-editor cosmic-wallpapers cosmic-workspaces gnome-keyring notification-daemon xdg-desktop-portal-cosmic xdg-desktop-portal-gtk xorg-xwayland
 ```
 
 ## Cinnamon:
