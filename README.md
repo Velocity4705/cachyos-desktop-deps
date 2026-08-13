@@ -1,5 +1,5 @@
 # CachyOS Desktop Environment Dependencies
-> **Last verified: August 12, 2026** - Updates when changed.
+> **Last verified: August 13, 2026** - Updates when changed.
 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -58,7 +58,7 @@ sudo pacman -S celluloid gvfs gvfs-afc gvfs-gphoto2 gvfs-mtp gvfs-nfs gvfs-smb l
 
 ## MangoWM:
 ```
-sudo pacman -S cachyos-mangowc-dms sddm
+sudo pacman -S cachyos-mango-noctalia sddm
 ```
 
 ## Niri:

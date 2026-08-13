@@ -1,7 +1,7 @@
 {
   "metadata": {
     "upstream_url": "https://raw.githubusercontent.com/CachyOS/cachyos-calamares/cachyos-dev/src/modules/netinstall/netinstall.yaml",
-    "last_synced": "2026-08-12T07:24:15.668921",
+    "last_synced": "2026-08-13T07:26:57.529141",
     "last_updated": "2026-01-12"
   },
   "desktop_environments": {
@@ -439,7 +439,7 @@
     "MangoWM": {
       "upstream_name": "MangoWM",
       "packages": [
-        "cachyos-mangowc-dms",
+        "cachyos-mango-noctalia",
         "sddm"
       ]
     }
