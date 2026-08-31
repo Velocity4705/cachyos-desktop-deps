@@ -1,7 +1,7 @@
 {
   "metadata": {
     "upstream_url": "https://raw.githubusercontent.com/CachyOS/cachyos-calamares/cachyos-dev/src/modules/netinstall/netinstall.yaml",
-    "last_synced": "2026-08-13T07:26:57.529141",
+    "last_synced": "2026-08-31T12:52:37.551593",
     "last_updated": "2026-01-12"
   },
   "desktop_environments": {
@@ -195,6 +195,7 @@
         "cosmic-files",
         "cosmic-greeter",
         "cosmic-icon-theme",
+        "cosmic-initial-setup",
         "cosmic-launcher",
         "cosmic-monitor",
         "cosmic-notifications",
